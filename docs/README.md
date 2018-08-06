@@ -55,6 +55,7 @@ The API uses HTTP status codes in addition to the message value. Everything in t
 | 409  | Conflict              |
 | 422  | Unprocessable Entity  |
 | 500  | Internal Server Error |
+| 503  | Service Unavailable   |
 
 The `error` property is only present when an error has occurred.
 
@@ -211,6 +212,7 @@ The access token that is returned through this endpoint must be used with any su
 
 | Endpoint                   | Protected
 | -------------------------- | -----------------------
+| /                          | Yes
 | /[env]/activity            | Yes
 | /[env]/auth                | No
 | /[env]/collections         | Yes
@@ -232,7 +234,7 @@ The access token that is returned through this endpoint must be used with any su
 | /[env]/utils               | No
 | /instances                 | No
 | /interfaces                | No
-| /listings                  | No
+| /layouts                   | No
 | /pages                     | No
 | /server                    | No
 | /types                     | Yes
@@ -249,19 +251,19 @@ POST /instances
 
 | Attribute       | Description                            | Required
 | --------------- | -------------------------------------- | ---------
+| `env`           | The environment name                   | No
+| `force`         | Force the installation. Config file will be overwritten | No
 | `db_host`       | Database host. Default: `localhost`    | No
 | `db_port`       | Database port. Default: `3306`         | No
-| `db_name`       | Database name.                         | Yes
-| `db_user`       | Database username.                     | Yes
+| `db_name`       | Database name                          | Yes
+| `db_user`       | Database username                      | Yes
 | `db_password`   | Database user password. Default: `None`| No
+| `project_name`  | The Directus name. Default: `Directus` | No
 | `user_email`    | Admin email                            | Yes
 | `user_password` | Admin password                         | Yes
 | `user_token`    | Admin token. Default: `admin_token`    | No
-| `mail_from`     | Default mailer `from` email            | No
-| `project_name`  | The Directus name. Default: `Directus` | No
-| `env`           | The environment name.                  | No
-| `force`         | Force the installation                 | No
-| `cors_enabled`  | Enable CORS                            | No 
+| `cors_enabled`  | Enable CORS                            | No
+| `mail_from`     | Default `from` email for the mailer    | No 
 
 ::: warning
 When `env` is not specified it will create the default configuration
@@ -277,9 +279,9 @@ When `env` is not specified it will create the default configuration
 }
 ```
 
-### Refresh Authentication Token
+### Refresh JWT Authentication Token
 
-Gets a new fresh token using a valid auth token
+Gets a new fresh token using a valid JWT authentication token
 
 ```http
 POST /[env]/auth/refresh
@@ -287,7 +289,7 @@ POST /[env]/auth/refresh
 
 #### Body
 
-A valid token
+A valid JWT token.
 
 ```json
 {
@@ -571,14 +573,26 @@ Time should follow the `HH:mm:ss` format. Ex: 15:01:01
 
 ## Items
 
-Items are essentially individual database records which each contain one or more fields (database columns). Each item belongs to a specific container (database table) and is identified by the value of its primary key field. In this section we describe the different ways you can manage items.
+Items are essentially individual database records which each contain one or more fields (database columns). Each item belongs to a specific collection (database table) and is identified by the value of its primary key field. In this section we describe the different ways you can manage items.
+
+| Endpoint                                    | Description
+| ------------------------------------------- | -----------------------
+| POST   /[env]/items/[collection]            | Create one or multiple items
+| GET    /[env]/items/[collection]/[id]       | Get a single or multiple items
+| GET    /[env]/items/[collection]            | Get a list of items
+| PATCH  /[env]/items/[collection-name]/[id]  | Update a single or multiple items
+| PATCH  /[env]/items/[collection]            | Update multiple items when the payload is an array
+| DELETE /[env]/items/[collection]/[id]       | Delete a single or multiple items
+| GET    /[env]/items/[collection]/[id]/revisions | Get a list of revisions of a single item
+| GET    /[env]/items/[collection]/[id]/revisions/[offset] | Get a single revision of a item
+| PATCH  /[env]/items/[collection]/[id]/revert/[revision] | Revert a item to a specific revision
 
 ### Create Item
 
 Creates one or more items in a given collection
 
 ```http
-POST /items/[collection-name]
+POST /items/[collection]
 ```
 
 #### Body
@@ -628,8 +642,8 @@ The API may not return any data for successful requests if the user doesn't have
 Get one or more single items from a given collection
 
 ```http
-GET /items/[collection-name]/[pk]
-GET /items/[collection-name]/[pk],[pk],[pk]
+GET /items/[collection]/[id]
+GET /items/[collection]/[id],[id],[id]
 ```
 
 #### Query Parameters
@@ -664,7 +678,7 @@ GET /items/[collection-name]/[pk],[pk],[pk]
 Get an array of items from a given collection
 
 ```http
-GET /items/[collection-name]
+GET /items/[collection]
 ```
 
 #### Query Parameters
@@ -697,12 +711,132 @@ GET /items/[collection-name]
     curl -u [token]: -g https://api.directus.io/_/items/projects?filter[category][eq]=design
     ```
 
-### Get Item Revision
+### Update Item
+
+Update a single item in a specific collection
+
+@TODO LOOK INTO ALLOWING FILTER PARAM FOR UPDATES, EG: `PUT /items/projects?filter[title][eq]=title`
+
+```http
+PATCH /items/[collection]/[id]
+```
+
+::: warning
+
+*   **PATCH** partially updates the item with the provided data, any missing field is ignored
+
+:::
+
+#### Body
+
+A single item to be updated. Field keys must match the collection's fields name
+
+#### Common Responses
+
+| Code                     | Description                                                          |
+| ------------------------ | -------------------------------------------------------------------- |
+| 200 OK                   | `data`: The updated item, including default fields added by Directus |
+| 400 Bad Request          | `message`: Syntax error in provided JSON                             |
+| 404 Not Found            | `message`: Collection doesn’t exist                                  |
+| 422 Unprocessable Entity | `message`: Column doesn’t exist in collection                        |
+
+#### Examples
+
+*   Return the project item with an ID of `1`
+    ```bash
+    curl -u <token>: https://api.directus.io/_/items/projects/1
+    ```
+
+### Update Items
+
+Update multiple items in a specific collection
+
+```http
+PATCH /items/[collection]
+```
+
+::: warning PATCH
+
+*   **PATCH** partially updates the item with the provided data, any missing data is ignored
+*   Each item must have their primary key (ID) field
+
+:::
+
+::: danger WARNING
+Batch Update can quickly overwrite large amounts of data. Please be careful when implementing this request.
+:::
+
+#### Body
+
+An array of items to be updated. Field keys must match the collection's fields name.
+
+#### Common Responses
+
+| Code                     | Description                                                          |
+| ------------------------ | -------------------------------------------------------------------- |
+| 200 OK                   | `data`: The updated item, including default fields added by Directus |
+| 400 Bad Request          | `message`: Syntax error in provided JSON                             |
+| 404 Not Found            | `message`: Collection doesn’t exist                                  |
+| 422 Unprocessable Entity | `message`: Column doesn’t exist in collection                        |
+
+### Delete Item
+
+Delete one or more items from a specific collection. This endpoint also accepts CSV of primary key values.
+
+```http
+DELETE /items/[collection]/[id]
+DELETE /items/[collection]/[id],[id],[id]
+```
+
+#### Common Responses
+
+| Code           | Description                                     |
+| -------------- | ----------------------------------------------- |
+| 204 No Content | Record was successfully deleted                 |
+| 404 Not Found  | `message`: Item doesn't exist within collection |
+
+::: danger WARNING
+Batch Delete can quickly destroy large amounts of data. Please be careful when implementing this request.
+:::
+
+### Get an Item Revisions
+
+Get a list of revisions from a given item
+
+```http
+GET /items/[collection]/[id]/revisions
+```
+
+#### Query Parameters
+
+| Name          | Default   | Description                                                |
+| ------------- | --------- | ---------------------------------------------------------- |
+| limit         | 200       | The number of items to request                             |
+| offset        | 0         | How many items to skip before fetching results             |
+| fields        | \*        | CSV of fields to include in response [Learn More](#fields) |
+| meta          |           | CSV of metadata fields to include [Learn More](#metadata)  |
+| lang          | \*        | Include translation(s) [Learn More](#language)             |
+
+#### Common Responses
+
+| Code          | Description                                                     |
+| ------------- | --------------------------------------------------------------- |
+| 200 OK        | `data`: Array of items<br>`meta`: Depends on requested metadata |
+| 404 Not Found | `message`: Collection doesn’t exist                             |
+
+#### Examples
+
+*   Get all revisions from the project item with a primary key of 1
+    ```bash
+    curl https://api.directus.io/_/items/projects/1/revisions
+    ```
+
+### Get an Item Revision
 
 Get a specific revision from a given item. This endpoint uses a zero-based offset to select a revision, where `0` is the creation revision. Negative offsets are allowed, and select as if `0` is the current revisions.
 
 ```http
-GET /items/[collection-name]/[pk]/revisions/[offset]
+GET /items/[collection]/[id]/revisions/[offset]
 ```
 
 #### Query Parameters
@@ -732,107 +866,13 @@ GET /items/[collection-name]/[pk]/revisions/[offset]
     curl -u <token>: https://api.directus.io/_/items/projects/1/revisions/-2
     ```
 
-### Get Item Revisions
-
-Get an array of revisions from a given item
-
-```http
-GET /items/[collection-name]/[pk]/revisions
-```
-
-#### Query Parameters
-
-| Name          | Default   | Description                                                |
-| ------------- | --------- | ---------------------------------------------------------- |
-| limit         | 200       | The number of items to request                             |
-| offset        | 0         | How many items to skip before fetching results             |
-| fields        | \*        | CSV of fields to include in response [Learn More](#fields) |
-| meta          |           | CSV of metadata fields to include [Learn More](#metadata)  |
-| lang          | \*        | Include translation(s) [Learn More](#language)             |
-
-#### Common Responses
-
-| Code          | Description                                                     |
-| ------------- | --------------------------------------------------------------- |
-| 200 OK        | `data`: Array of items<br>`meta`: Depends on requested metadata |
-| 404 Not Found | `message`: Collection doesn’t exist                             |
-
-#### Examples
-
-*   Get all revisions from the project item with a primary key of 1
-    ```bash
-    curl https://api.directus.io/_/items/projects/1/revisions
-    ```
-
-### Update Item
-
-Update or replace a single item from a given collection
-
-@TODO LOOK INTO ALLOWING FILTER PARAM FOR UPDATES, EG: `PUT /items/projects?filter[title][eq]=title`
-
-```http
-PATCH /items/[collection-name]/[pk]
-```
-
-::: warning
-
-*   **PATCH** partially updates the item with the provided data, any missing data is ignored
-
-:::
-
-#### Body
-
-A single item to be updated. Field keys must match the collection's column names
-
-#### Common Responses
-
-| Code                     | Description                                                          |
-| ------------------------ | -------------------------------------------------------------------- |
-| 200 OK                   | `data`: The updated item, including default fields added by Directus |
-| 400 Bad Request          | `message`: Syntax error in provided JSON                             |
-| 404 Not Found            | `message`: Collection doesn’t exist                                  |
-| 422 Unprocessable Entity | `message`: Column doesn’t exist in collection                        |
-
-#### Examples
-
-*   Return the project item with an ID of `1`
-    ```bash
-    curl -u <token>: https://api.directus.io/_/items/projects/1
-    ```
-
-### Update Items
-
-Update multiple items in a given collection
-
-```http
-PATCH /items/[collection-name]
-```
-
-::: warning PATCH
-
-*   **PATCH** partially updates the item with the provided data, any missing data is ignored
-
-:::
-
-::: danger WARNING
-Batch Update can quickly overwrite large amounts of data. Please be careful when implementing this request.
-:::
-
-#### Common Responses
-
-| Code                     | Description                                                          |
-| ------------------------ | -------------------------------------------------------------------- |
-| 200 OK                   | `data`: The updated item, including default fields added by Directus |
-| 400 Bad Request          | `message`: Syntax error in provided JSON                             |
-| 404 Not Found            | `message`: Collection doesn’t exist                                  |
-| 422 Unprocessable Entity | `message`: Column doesn’t exist in collection                        |
 
 ### Revert Item
 
-Reverts a single item to a previous revision state
+Revert a single item to a previous revision state
 
 ```http
-PATCH /items/[collection-name]/[item-pk]/revert/[revision-pk]
+PATCH /items/[collection]/[item-id]/revert/[revision-id]
 ```
 
 #### Body
@@ -854,26 +894,6 @@ There is no body for this request
     curl -u <token>: https://api.directus.io/_/items/projects/1/revert/2
     ```
 
-### Delete Item
-
-Deletes one or more items from a specific collection. This endpoint also accepts CSV of primary key values, and would then return an array of items
-
-```http
-DELETE /items/[collection-name]/[pk]
-DELETE /items/[collection-name]/[pk],[pk],[pk]
-```
-
-#### Common Responses
-
-| Code           | Description                                     |
-| -------------- | ----------------------------------------------- |
-| 204 No Content | Record was successfully deleted                 |
-| 404 Not Found  | `message`: Item doesn't exist within collection |
-
-::: danger WARNING
-Batch Delete can quickly destroy large amounts of data. Please be careful when implementing this request.
-:::
-
 ## System
 
 @TODO All these endpoints need to have the same reference as listed above
@@ -884,7 +904,15 @@ These system endpoints still follow the same spec as a “regular” `/items/[co
 
 ### Activity
 
-#### Activities Type
+| Endpoint                                    | Description
+| ------------------------------------------- | -----------------------
+| GET    /[env]/activity                      | Get a list of activity
+| GET    /[env]/activity/[id]                 | Get a single or multiple activity
+| POST   /[env]/activity/comment              | Create a comment in a specific collection's item
+| PATCH  /[env]/activity/comment/[id]         | Update a single comment
+| DELETE /[env]/activity/comment/[id]         | Delete a single comment
+
+#### Activity Types
 | Name          | Description                                                   |
 | ------------- | ------------------------------------------------------------- |
 | ENTRY         | Activities to any items besides files and settings collection |
@@ -893,7 +921,7 @@ These system endpoints still follow the same spec as a “regular” `/items/[co
 | LOGIN         | Activities on authentication                                  |
 | COMMENT       | Activities related to a comment in a collections's item       |
 
-#### Activities Actions
+#### Activity Actions
 | Name          | Description                                                |
 | ------------- | ---------------------------------------------------------- |
 | ADD           | Item created                                               |
@@ -903,9 +931,9 @@ These system endpoints still follow the same spec as a “regular” `/items/[co
 | LOGIN         | User authenticate using credentials                        |
 | REVERT        | Item updated using a revision data                         |
 
-#### Get activities
+#### Get a list of Activity
 
-Get an array of activities
+Get an array of activity
 
 ```http
 GET /activity
@@ -926,12 +954,13 @@ GET /activity
 | group         |           | Group items by a field value @TODO examples                |
 
 
-#### Get Item
+#### Get a single Activity
 
-Get one or more single items from a given collection
+Get one or more activity from a given collection
 
 ```http
-GET /activity/[pk]
+GET /activity/[id]
+GET /activity/[id],[id],[id]
 ```
 
 ##### Query Parameters
@@ -940,7 +969,6 @@ GET /activity/[pk]
 | ------ | --------- | ---------------------------------------------------------- |
 | fields | \*        | CSV of fields to include in response [Learn More](#fields) |
 | meta   |           | CSV of metadata fields to include [Learn More](#metadata)  |
-| status | Published | CSV of statuses [Learn More](#status)                      |
 | lang   | \*        | Include translation(s) [Learn More](#language)             |
 
 ##### Common Responses
@@ -950,10 +978,9 @@ GET /activity/[pk]
 | 200 OK        | `data`: Retrieved item<br>`meta`: Depends on requested metadata              |
 | 404 Not Found | `message`: Collection doesn’t exist, or item doesn't exist within collection |
 
+#### Create a new comment
 
-#### Create a new message
-
-Create a new message, needs to be related to an a collection.
+Create a new comment, needs to be related to a collection's item.
 
 ```http
 POST /activity/comment
@@ -965,23 +992,69 @@ A single object representing the new comment.
 
 ```json
 {
-    "comment": "A new comment"
+  "collection": "projects",
+  "item": 1,
+  "comment": "A new comment"
 }
+```
+
+#### Update a comment
+
+Update a comment content.
+
+```http
+PATCH /activity/comment/[id]
+```
+
+##### Body
+
+A single object representing the new comment.
+
+```json
+{
+  "comment": "An updated comment"
+}
+```
+
+#### Delete a comment
+
+Create a new comment, needs to be related to a collection's item.
+
+```http
+DELETE /activity/comment/[id]
 ```
 
 ### Fields
 
-These endpoints are used for creating, updating, or deleting fields through the API requires the API to modify the database schema directly.
+These endpoints are used for creating, listing, updating, or deleting fields through the API requires the API to modify the database schema directly.
 
-#### List of fields
+| Endpoint                                    | Description
+| ------------------------------------------- | -----------------------
+| GET    /[env]/fields                        | Get a list of all fields
+| GET    /[env]/fields/[collection]           | Get a list of fields of a specific collection
+| GET    /[env]/fields/[collection]/[field]   | Get a details of a single field
+| POST   /[env]/fields/[collection]           | Add a new field to a specific collection
+| PATCH  /[env]/fields/[collection]/[id]      | Update a single field
+| PATCH  /[env]/fields/[collection]           | Update multiple fields
+| DELETE /[env]/fields/[collection]/[id]      | Delete a single field
+
+#### List of All fields
+
+```http
+GET /[env]/fields
+```
+
+Returns the list of all fields in the database
+
+#### List of Collection's fields
 
 ```http
 GET /[env]/fields/[collection]
 ```
 
-Returns the list of fields in a given collection.
+Returns the list of fields that belongs to a specific collection.
 
-#### Single field
+#### Get a single field
 
 ```http
 GET /[env]/fields/[collection]/[field]
@@ -1017,6 +1090,16 @@ Permanently deletes a field and its content.
 
 These endpoints are used for creating or updating a files requires the API to accept a special field allowing for the base64 file data. Beyond that, it accepts POST requests with the multipart-formdata enctype, to allow for easier uploading of file(s).
 
+| Endpoint                                    | Description
+| ------------------------------------------- | -----------------------
+| GET    /[env]/files                         | Get a list of file
+| GET    /[env]/files/[id]                    | Get the details of a single file
+| POST   /[env]/files                         | Upload a new file
+| PATCH  /[env]/files/[id]                    | Update a single file
+| DELETE /[env]/files/[id]                    | Delete a single file
+| GET    /[env]/files/[id]/revisions          | Get a file revisions
+| GET    /[env]/files/[id]/revisions/[offset] | Get a file specific revision
+
 #### List of files
 
 ```http
@@ -1025,10 +1108,10 @@ GET /[env]/files
 
 Returns the list of your files.
 
-#### Single file
+#### Get file
 
 ```http
-GET /[env]/files/[pk]
+GET /[env]/files/[id]
 ```
 
 Returns the details of a single file.
@@ -1044,15 +1127,15 @@ Uploads a new file.
 #### Update file
 
 ```http
-PATCH /[env]/files/[pk]
+PATCH /[env]/files/[id]
 ```
 
-Updates the details of a given field.
+Update a specific file
 
 #### Delete file
 
 ```http
-DELETE /[env]/files/[pk]
+DELETE /[env]/files/[id]
 ```
 
 Permanently deletes a file.
@@ -1060,30 +1143,30 @@ Permanently deletes a file.
 #### List of Revisions
 
 ```http
-GET /[env]/files/[pk]/revisions
+GET /[env]/files/[id]/revisions
 ```
 
-Returns a list of a single file revisions
+Returns a revisions list of a file.
 
 #### Single revision
 
 ```http
-GET /[env]/files/[pk]/revisions/[offset]
+GET /[env]/files/[id]/revisions/[offset]
 ```
 
-Returns the revision of a single item using a 0-index based offset.
-
-#### Revert detail
-
-```http
-GET /[env]/files/[pk]/revert/[revision-pk]
-```
-
-Reverts the details of a file to a given revision.
+Returns the revision of a file using a 0-index based offset.
 
 ### Folders
 
 These endpoints are used for creating, updating, or deleting a virtual folder.
+
+| Endpoint                                    | Description
+| ------------------------------------------- | -----------------------
+| POST   /[env]/files/folders                 | Create a new virtual folder
+| GET    /[env]/files/folders                 | Get a list of virtual folder
+| GET    /[env]/files/folders/[id]            | Get details of a single virtual folder
+| PATCH  /[env]/files/folders/[id]            | Update a virtual folder
+| DELETE /[env]/files/folders/[id]            | Delete a virtual folder
 
 #### List of folders
 
@@ -1096,7 +1179,7 @@ Returns the list of your virtual folders.
 #### Single folder
 
 ```http
-GET /[env]/files/folders/[pk]
+GET /[env]/files/folders/[id]
 ```
 
 Returns the details of a single virtual folder.
@@ -1112,7 +1195,7 @@ Creates a new virtual folder.
 #### Update file
 
 ```http
-PATCH /[env]/files/folders/[pk]
+PATCH /[env]/files/folders/[id]
 ```
 
 Updates the details of a given folder.
@@ -1120,14 +1203,30 @@ Updates the details of a given folder.
 #### Delete file
 
 ```http
-DELETE /[env]/files/[pk]
+DELETE /[env]/files/[id]
 ```
 
 Permanently deletes a virtual folder. Leaving its sub folder and files orphan.
 
-### Collections Presets
+### Collection Presets
 
-These endpoints are used for creating, updating, or deleting collection presets through the API requires the API to modify the database schema directly.
+These endpoints are used for creating, listing, updating, or deleting collection presets.
+
+| Endpoint                                    | Description
+| ------------------------------------------- | -----------------------
+| POST   /[env]/collection_presets            | Create a new collection preset
+| GET    /[env]/collection_presets            | Get a list of all the collection presets
+| GET    /[env]/collection_presets/[id]       | Get details of a collection preset
+| PATCH  /[env]/collection_presets/[id]       | Update a collection preset
+| DELETE /[env]/collection_presets/[id]       | Delete a collection preset
+
+#### Create a new collection preset
+
+```http
+POST /[env]/collection_presets
+```
+
+Creates a new collection preset
 
 #### List of collection presets
 
@@ -1140,31 +1239,23 @@ Returns the list of collection presets
 #### Single collection preset
 
 ```http
-GET /[env]/collection_presets/[pk]
+GET /[env]/collection_presets/[id]
 ```
 
-Returns the details of a single collection preset.
-
-#### Create a new collection preset
-
-```http
-POST /[env]/collection_presets
-```
-
-Creates a new collection preset
+Returns the details of a collection preset.
 
 #### Update a collection preset
 
 ```http
-PATCH /[env]/collection_presets/[pk]
+PATCH /[env]/collection_presets/[id]
 ```
 
-Updates the details of a given collection preset.
+Updates the details of a collection preset.
 
 #### Delete collection preset
 
 ```http
-DELETE /[env]/collection_presets/[pk]
+DELETE /[env]/collection_presets/[id]
 ```
 
 Permanently deletes a collection_presets
@@ -1172,6 +1263,25 @@ Permanently deletes a collection_presets
 ### Permissions
 
 These endpoints are used for creating, updating, or deleting permissions through the API requires the API to modify the database schema directly.
+
+| Endpoint                                  | Description
+| ----------------------------------------- | -----------------------
+| POST   /[env]/permissions                 | Create a new permission
+| GET    /[env]/permissions                 | Get a list of all permissions
+| GET    /[env]/permissions/[id]            | Get details of a single permission
+| PATCH  /[env]/permissions/[id]            | Update one or more permissions with the same data
+| PATCH  /[env]/permissions                 | Update one or more permissions separately in batch.
+| DELETE /[env]/permissions/[id]            | Delete a permission
+| GET    /[env]/permissions/me              | Get a list of permission belonging to the authenticated user
+| GET    /[env]/permissions/me/[collection] | Get a list of collection's permission belonging to the authenticated user
+
+#### Create a new permission
+
+```http
+POST /[env]/permissions
+```
+
+Creates a new permission.
 
 #### List of permissions
 
@@ -1184,38 +1294,71 @@ Returns the list of permissions.
 #### Single permission
 
 ```http
-GET /[env]/permissions/[pk]
+GET /[env]/permissions/[id]
 ```
 
 Returns the details of a single permission.
 
-#### Create a new permission
-
-```http
-POST /[env]/permissions
-```
-
-Creates a new permission.
-
 #### Update a permission
 
 ```http
-PATCH /[env]/permissions/[pk]
+PATCH /[env]/permissions/[id]
+PATCH /[env]/permissions/[id],[id],[id]
 ```
 
-Updates the details of a given permission.
+Updates one or more permission with the same data.
+
+#### Update a multiple permission
+
+```http
+PATCH /[env]/permissions
+```
+
+Updates the details of multiple permission items.
 
 #### Delete a permission
 
 ```http
-DELETE /[env]/permissions/[pk]
+DELETE /[env]/permissions/[id]
 ```
 
 Permanently deletes a permission.
 
+#### List of user permissions
+
+```http
+GET /[env]/permissions/me
+```
+
+Returns a list of permissions belonging to the authenticated user.
+
+#### List of user collections's permission
+
+```http
+GET /[env]/permissions/me/[collection]
+```
+
+Returns a list of collections's permissions belonging to the authenticated user.
+
 ### Relations
 
-These endpoints are used for creating, updating, or deleting relations.
+These endpoints are used for creating, listing, updating, or deleting relations.
+
+| Endpoint                                    | Description
+| ------------------------------------------- | -----------------------
+| POST   /[env]/relations                     | Create one or more relations
+| GET    /[env]/relations                     | Get a list of all the relations
+| GET    /[env]/relations/[id]                | Get details of one or more relations
+| PATCH  /[env]/relations/[id]                | Update one or more relations with the same data
+| DELETE /[env]/relations/[id]                | Delete one or more relations
+
+#### Create a new relation
+
+```http
+POST /[env]/relations
+```
+
+Creates one or more new relations.
 
 #### List of relations
 
@@ -1228,38 +1371,49 @@ Returns the list of relations.
 #### Single relation
 
 ```http
-GET /[env]/relations/[pk]
+GET /[env]/relations/[id]
+GET /[env]/relations/[id],[id],[id]
 ```
 
-Returns the details of a single relation.
-
-#### Create a new relation
-
-```http
-POST /[env]/relations
-```
-
-Creates a new relation.
+Returns the details of one or more relations.
 
 #### Update a relation
 
 ```http
-PATCH /[env]/relations/[pk]
+PATCH /[env]/relations/[id]
+PATCH /[env]/relations/[id],[id],[id]
 ```
 
-Updates the details of a given relation.
+Updates the details of one or more relations with the same data.
 
 #### Delete a relation
 
 ```http
-DELETE /[env]/relations/[pk]
+DELETE /[env]/relations/[id]
+DELETE /[env]/relations/[id],[id],[id]
 ```
 
-Permanently deletes a relation.
+Permanently deletes one or more relations.
 
 ### Roles
 
-These endpoints are used for creating, updating, or deleting roles.
+These endpoints are used for creating, listing, updating, or deleting roles.
+
+| Endpoint                                    | Description
+| ------------------------------------------- | -----------------------
+| POST   /[env]/roles                         | Create a new role
+| GET    /[env]/roles                         | Get a list of all roles
+| GET    /[env]/roles/[id]                    | Get details of one or more roles
+| PATCH  /[env]/roles/[id]                    | Update a role
+| DELETE /[env]/roles/[id]                    | Delete a role
+
+#### Create a new role
+
+```http
+POST /[env]/roles
+```
+
+Creates a new role.
 
 #### List of roles
 
@@ -1272,31 +1426,23 @@ Returns the list of roles.
 #### Single role
 
 ```http
-GET /[env]/roles/[pk]
+GET /[env]/roles/[id]
 ```
 
-Returns the details of a single role.
-
-#### Create a new role
-
-```http
-POST /[env]/roles
-```
-
-Creates a new role.
+Returns the details of a role.
 
 #### Update a role
 
 ```http
-PATCH /[env]/roles/[pk]
+PATCH /[env]/roles/[id]
 ```
 
-Updates the details of a given role.
+Updates the details of a role.
 
 #### Delete a role
 
 ```http
-DELETE /[env]/roles/[pk]
+DELETE /[env]/roles/[id]
 ```
 
 Permanently deletes a role.
@@ -1305,21 +1451,14 @@ Permanently deletes a role.
 
 These endpoints are used for creating, updating, or deleting settings.
 
-#### List of settings
-
-```http
-GET /[env]/settings
-```
-
-Returns the list of settings.
-
-#### Single setting
-
-```http
-GET /[env]/settings/[pk]
-```
-
-Returns the details of a single setting.
+| Endpoint                                    | Description
+| ------------------------------------------- | -----------------------
+| POST   /[env]/settings                      | Create one or more settings
+| GET    /[env]/settings                      | Get a list of all settings
+| GET    /[env]/settings/[id]                 | Get details of one or more settings
+| PATCH  /[env]/settings/[id]                 | Update one or more settings with the same data
+| PATCH  /[env]/settings                      | Update multiple settings
+| DELETE /[env]/settings/[id]                 | Delete one or multiple settings
 
 #### Create a new setting
 
@@ -1329,25 +1468,65 @@ POST /[env]/settings
 
 Creates a new setting.
 
+#### List of settings
+
+```http
+GET /[env]/settings
+```
+
+Returns the list of all settings.
+
+#### Single setting
+
+```http
+GET /[env]/settings/[id]
+GET /[env]/settings/[id],[id],[id]
+```
+
+Returns the details of one or more settings.
+
 #### Update a setting
 
 ```http
-PATCH /[env]/settings/[pk]
+PATCH /[env]/settings/[id]
 ```
 
-Updates the details of a given setting.
+Updates the details of one or more setting with the same data.
+
+```http
+PATCH /[env]/settings
+```
+
+Updates the details of multiple settings.
 
 #### Delete a setting
 
 ```http
-DELETE /[env]/setting/[pk]
+DELETE /[env]/setting/[id]
+DELETE /[env]/setting/[id],[id],[id]
 ```
 
-Permanently deletes a setting.
+Permanently deletes one or more settings.
 
 ### Collections
 
 These endpoints are used for creating, updating, or deleting settings. Similar to `/fields`, it alters the database schema directly.
+
+| Endpoint                                    | Description
+| ------------------------------------------- | -----------------------
+| POST   /[env]/collections                   | Create a collection
+| GET    /[env]/collections                   | Get a list of all collections
+| GET    /[env]/collections/[name]            | Get details of a collection
+| PATCH  /[env]/collections/[name]            | Update a collection
+| DELETE /[env]/collections/[name]            | Delete a collection
+
+#### Create a new collection
+
+```http
+POST /[env]/collections
+```
+
+Creates a new collection.
 
 #### List of collctions
 
@@ -1360,34 +1539,26 @@ Returns the list of collections.
 #### Single collection
 
 ```http
-GET /[env]/collections/[pk]
+GET /[env]/collections/[name]
 ```
 
-Returns the details of a single collection.
-
-#### Create a new collection
-
-```http
-POST /[env]/collections
-```
-
-Creates a new collection.
+Returns the details of a collection.
 
 #### Update a collection
 
 ```http
-PATCH /[env]/collections/[pk]
+PATCH /[env]/collections/[name]
 ```
 
-Updates the details of a given collection.
+Updates the details of a collection.
 
 #### Delete a collection
 
 ```http
-DELETE /[env]/collections/[pk]
+DELETE /[env]/collections/[name]
 ```
 
-Permanently deletes a collection information, the table and all its contents.
+Permanently deletes a collection information, the database table and all its contents.
 
 ### Get Revision
 
