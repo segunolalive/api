@@ -20,9 +20,8 @@ export default {
       return {
         theme: "snow",
         modules: {
-          toolbar: [[...inline], [...block], [...embeds]]
-        },
-        formats: [...inline, ...block, ...embeds]
+          toolbar: this.options.toolbarOptions
+        }
       };
     }
   },
