@@ -12,7 +12,7 @@ The Directus API uses SemVer for version labeling within the repo and for files 
 
 ### Environments
 
-All endpoints are prefixed with the an environment name (based on a configuration file name). The API will try to find a configuration file that matches a given environment name and use it as the request configuration.
+All endpoints are prefixed with the an environment name (based on a configuration file name), except the the home (`/`) endpoint. The API will try to find a configuration file that matches a given environment name and use it as the request configuration.
 The underscore (`_`) is reserved as the default environment name.
 
 A few examples of api requests when your api is located at `/api` sub-directory:
@@ -153,64 +153,55 @@ The API performs two types of validation on submitted data:
 *   **Data Type** – The API checks the submitted value's type against the directus or database's field type. For example, a String submitted for an INT field will result in an error.
 *   **RegEx** – The API checks the submitted value against its column's `directus_fields.validation` RegEx. If the value doesn't match then an error will be returned.
 
-## Authentication
+## Instances
 
-Most endpoints are checked against the permissions settings. If a user is not authenticated or isn’t allowed to access certain endpoints then API will respond with either a `401 Unauthorized` or a `403 Forbidden` respectively. In addition to these status codes, the API returns a specific reason in the `error.message` field.
+### Create new instance
 
-### Tokens
-
-To gain access to protected data, you must include an access token with every request. These tokens follow the [JWT spec](https://jwt.io) and contain the user id, type of token (`auth`), and an expiration date in the payload, which is encrypted with a secret key.
-
-There are several ways to include this access token:
-
-#### 1. Bearer Token in Authorization Header
-
-`curl -H "Authorization: Bearer Py8Rumu.LD7HE5j.uFrOR5" https://example.com/api/`
-
-#### 2. HTTP Basic Auth
-
-`curl -u Py8Ru.muLD7HE.5juFrOR5: https://example.com/api/`
-
-Notice that the token is `Py8Ru.muLD7HE.5juFrOR5` and has a colon `:` at the end. Using the Basic auth, the auth user is the token and the auth password should be either blank or the same token.
-
-#### 3. Query `access_token` Parameter
-
-`curl https://example.com/api/?access_token=Py8RumuLD.7HE5j.uFrOR5`
-
-### Get Authentication Token
-
-Gets a token from a Directus user's credentials
+Create a new instance connection
 
 ```http
-POST /[env]/auth/authenticate
+POST /instances
 ```
 
 #### Body
 
-The users credentials
+| Attribute       | Description                              | Required
+| --------------- | ---------------------------------------- | ---------
+| `db_host`       | Database host. Default: `localhost`      | No
+| `db_port`       | Database port. Default: `3306`           | No
+| `db_name`       | Database name                            | Yes
+| `db_user`       | Database username                        | Yes
+| `db_password`   | Database user password. Default: `null`  | No
+| `user_email`    | Admin email                              | Yes
+| `user_password` | Admin password                           | Yes
+| `user_token`    | Admin token. Default: `null`             | No
+| `mail_from`     | Default mailer `from` email              | No
+| `project_name`  | The Directus name. Default: `Directus`   | No
+| `env`           | The environment name. Default: `null`    | No
+| `force`         | Force the installation. Default: `false` | No
+| `cors_enabled`  | Enable CORS. Default: `false`            | No 
+
+::: warning
+When `env` is not specified it will create the default configuration and can be accesed using `_`.
+:::
 
 ```json
 {
-    "email": "rijk@directus.io",
-    "password": "supergeheimwachtwoord"
+    "db_name": "directus",
+    "db_user": "root",
+    "db_password": "pass",
+    "user_email": "admin@admin.com",
+    "user_password": "admin"
 }
 ```
 
-#### Common Responses
+## Authentication
 
-| Code            | Description                        |
-| --------------- | ---------------------------------- |
-| 200 OK          | `data: [new access token]`         |
-| 400 Bad Request | `message: wrong email or password` |
+Most endpoints are checked against the permissions settings. If a user is not authenticated or isn’t allowed to access certain endpoints then API will respond with either a `401 Unauthorized` or a `403 Forbidden` respectively. In addition to these status codes, the API returns a specific reason in the `error.message` field.
 
-::: warning
-The access token that is returned through this endpoint must be used with any subsequent requests except for endpoints that don’t require auth.
-:::
+### Protected endpoints
 
-
-#### Protected endpoints
-
-| Endpoint                   | Protected
+| Endpoint                   | Needs Authentication
 | -------------------------- | -----------------------
 | /                          | Yes
 | /[env]/activity            | Yes
@@ -239,49 +230,80 @@ The access token that is returned through this endpoint must be used with any su
 | /server                    | No
 | /types                     | Yes
 
-### Create new instance
+### Tokens
 
-Create a new instance connection
+To gain access to protected data, you must include an access token with every request.
+
+There are two types of tokens:
+
+#### "Static" tokens
+
+These token never expired and they could be assigned to an user.
+
+### Temporary tokens
+
+These tokens are generated on user request and follows the [JWT spec](https://jwt.io).
+
+The JWT token payload contains the user id, type of token (`auth`), and an expiration date, which is signed with a secret key using `HS256` hashing algorithm.
+
+There are several ways to include this access token:
+
+#### 1. Bearer Token in Authorization Header
+
+```
+curl -H "Authorization: Bearer Py8Rumu.LD7HE5j.uFrOR5" https://example.com/api/
+curl -H "Authorization: Bearer staticToken" https://example.com/api/
+```
+
+#### 2. HTTP Basic Auth
+
+```
+curl -u Py8Ru.muLD7HE.5juFrOR5: https://example.com/api/
+curl -u staticToken: https://example.com/api/
+```
+
+Notice that the token is `Py8Ru.muLD7HE.5juFrOR5` and has a colon `:` at the end. Using the Basic auth, the auth user is the token and the auth password should be either blank or the same token.
+
+#### 3. Query `access_token` Parameter
+
+```
+curl https://example.com/api/?access_token=Py8RumuLD.7HE5j.uFrOR5
+curl https://example.com/api/?access_token=staticToken
+```
+
+### Get Authentication Token
+
+Generate a new access token using an user's credentials.
 
 ```http
-POST /instances
+POST /[env]/auth/authenticate
 ```
 
 #### Body
 
-| Attribute       | Description                            | Required
-| --------------- | -------------------------------------- | ---------
-| `env`           | The environment name                   | No
-| `force`         | Force the installation. Config file will be overwritten | No
-| `db_host`       | Database host. Default: `localhost`    | No
-| `db_port`       | Database port. Default: `3306`         | No
-| `db_name`       | Database name                          | Yes
-| `db_user`       | Database username                      | Yes
-| `db_password`   | Database user password. Default: `None`| No
-| `project_name`  | The Directus name. Default: `Directus` | No
-| `user_email`    | Admin email                            | Yes
-| `user_password` | Admin password                         | Yes
-| `user_token`    | Admin token. Default: `admin_token`    | No
-| `cors_enabled`  | Enable CORS                            | No
-| `mail_from`     | Default `from` email for the mailer    | No 
-
-::: warning
-When `env` is not specified it will create the default configuration
-:::
+The users credentials
 
 ```json
 {
-    "db_name": "directus",
-    "db_user": "root",
-    "db_password": "pass",
-    "user_email": "admin@admin.com",
-    "user_password": "admin"
+    "email": "rijk@directus.io",
+    "password": "supergeheimwachtwoord"
 }
 ```
 
-### Refresh JWT Authentication Token
+#### Common Responses
 
-Gets a new fresh token using a valid JWT authentication token
+| Code            | Description                        |
+| --------------- | ---------------------------------- |
+| 200 OK          | `data: [new access token]`         |
+| 400 Bad Request | `message: wrong email or password` |
+
+::: warning
+The access token that is returned through this endpoint must be used with any subsequent requests except for endpoints that don’t require auth.
+:::
+
+### Refresh Authentication Token
+
+Generate a new fresh token using a valid auth token
 
 ```http
 POST /[env]/auth/refresh
@@ -305,14 +327,14 @@ A valid JWT token.
 | 400 Bad Request | `message: invalid token`   |
 
 ::: warning
-The access token that is returned through this endpoint must be used with any subsequent requests except for endpoints that don’t require auth.
+The access token that is returned through this endpoint must be used with any subsequent requests except for endpoints that don’t require authentication.
 :::
 
 ### Password Reset Request
 
 The API will send an email to the requested user’s email containing a link with a short-lived reset token. This reset token can be used to finish the password reset flow.
 
-The reset token is a JWT token that include the user id, email and expiration time.
+The reset token is a JWT token that include the user id, email, type (`reset_password`) and expiration time.
 
 ```http
 POST /[env]/auth/password/request
@@ -324,8 +346,7 @@ The user's email address and the app URL from which the reset is requested
 
 ```json
 {
-    "email": "rijk@directus.io",
-    "instance": "https://example.com/admin/"
+    "email": "rijk@directus.io"
 }
 ```
 
@@ -337,7 +358,11 @@ The user's email address and the app URL from which the reset is requested
 
 ### Password Reset
 
-The API checks the validity of the reset token, that it hasn't expired, and matches the encrypted email address contained in the code to the one provided. It must be a GET request, since we can’t do POST requests from email clients. This endpoint generates a random temporary password for the user and sends it to their email address.
+The API checks the validity of the reset token, that it hasn't expired, and the email address contained in the token payload matches one in the database.
+
+It uses a GET request so user can be requested from email clients.
+
+This endpoint generates a random password for the user and sends it to their email address. The user is encourage to change this password as soon as possible.
 
 ```http
 GET /[env]/auth/password/reset/[reset-token]
@@ -360,22 +385,22 @@ A list of Third-party authentication services, such as Google and Facebook.
 ### Redirect to the authorization page
 
 ```http
-GET /auth/sso/[provider]
+GET /[env]/auth/sso/[provider]
 ```
 
-Automatically redirects to the authorization url if the origin host is allowed by the API otherwise it will return the authorization url.
+Automatically redirects to the authorization url if the origin host is allowed by the API, otherwise it will return the authorization url.
 
 ### Authenticate using the OAuth token/code
+
+```http
+POST /[env]/auth/sso/[provider]
+```
 
 ::: warning
 This endpoint is only useful when the callback is not handled by the API. See: /[env]/auth/sso/[provider]/callback.
 :::
 
 When the server authorized the user after authenticated it returns a `oauth_token` and `oauth_verifier` (version 1.0) or `code` (version 2.0).
-
-```http
-POST /[env]/auth/sso/[provider]
-```
 
 #### Body
 
@@ -426,14 +451,14 @@ There are many common query parameters used throughout the API. Those are descri
 
 ### Sorting
 
-`sort` is a CSV of fields used to sort fetched items. Sorting defaults to ascending (ASC) but a minus sign (`-`) can be used to reverse this to descending (DESC). Fields are prioritized by their order in the CSV. You can use a `?` to sort by random.
+`sort` is a CSV of fields used to sort fetched items. Sorting results are ascending (ASC) by default, but a minus sign (`-`) can be used to reverse this to descending (DESC). Fields are prioritized by their order in the CSV. You can use a `?` to sort randomly.
 
 #### Examples
 
 *   `sort=?` Sorts randomly
 *   `sort=name` Sorts by `name` ASC
 *   `&sort=name,-age` Sorts by `name` ASC followed by `age` DESC
-*   `sort=name,-age,?` Sorts by `name` ASC followed by `age` DESC, followed by random
+*   `sort=name,-age,?` Sorts by `name` ASC followed by `age` DESC, followed by random sorting
 
 ### Fields
 
