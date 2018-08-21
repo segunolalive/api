@@ -91,10 +91,10 @@
         @close="editExisting = false"
         @save="saveEdits">
         <div class="edit-modal-body">
-          <v-edit-form
+          <v-form
             :fields="relatedCollectionFields"
             :values="editExisting[junctionRelatedKey]"
-            @stage-value="stageValue"></v-edit-form>
+            @stage-value="stageValue"></v-form>
         </div>
       </v-modal>
     </portal>
@@ -112,10 +112,10 @@
         @close="addNew = null"
         @save="addNewItem">
         <div class="edit-modal-body">
-          <v-edit-form
+          <v-form
             :fields="relatedCollectionFields"
             :values="relatedDefaultsWithEdits"
-            @stage-value="stageValue"></v-edit-form>
+            @stage-value="stageValue"></v-form>
         </div>
       </v-modal>
     </portal>
