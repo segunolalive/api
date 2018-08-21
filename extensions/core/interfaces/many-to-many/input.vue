@@ -23,7 +23,7 @@
           <div
             v-for="item in items"
             class="row"
-            :key="item[junctionPrimaryKey.field]"
+            :key="item[junctionPrimaryKey]"
             @click="editExisting = item">
             <div
               v-for="column in columns"
@@ -33,7 +33,7 @@
               class="remove-item"
               v-tooltip="$t('remove_related')"
               @click.stop="removeRelated({
-                junctionKey: item[junctionPrimaryKey.field],
+                junctionKey: item[junctionPrimaryKey],
                 relatedKey: item[junctionRelatedKey][relatedKey],
                 item
               })">
@@ -167,10 +167,14 @@ export default {
       return this.relation.junction.collection_one.collection;
     },
     relatedKey() {
-      return this.$lodash.find(this.relation.junction.collection_one.fields, { primary_key: true }).field;
+      return this.$lodash.find(this.relation.junction.collection_one.fields, {
+        primary_key: true
+      }).field;
     },
     junctionPrimaryKey() {
-      return this.$lodash.find(this.relation.collection_many.fields, { primary_key: true }).field;
+      return this.$lodash.find(this.relation.collection_many.fields, {
+        primary_key: true
+      }).field;
     },
     junctionRelatedKey() {
       return this.relation.junction.field_many.field;
@@ -299,7 +303,7 @@ export default {
       this.selection = this.value
         .filter(val => !val.$delete)
         .filter(val => val[this.junctionRelatedKey] != null)
-        .map(val => val[this.junctionRelatedKey][this.relatedKey]);
+        .map(val => val[this.junctionRelatedKey]);
     },
     getRelatedCollectionsFieldInfo() {
       const junctionCollection = this.relation.collection_many.collection;
@@ -349,6 +353,8 @@ export default {
         .filter(val => !val.$delete)
         .map(val => val[this.junctionRelatedKey][this.relatedKey]);
 
+      const selectedPKs = this.selection.map(item => item[this.relatedKey]);
+
       // Set $delete: true to all items that aren't selected anymore
       const newValue = (this.value || []).map(junctionRow => {
         const relatedPK = (junctionRow[this.junctionRelatedKey] || {})[
@@ -358,16 +364,15 @@ export default {
         if (!relatedPK) return junctionRow;
 
         // If item was saved before, add $delete flag
-        if (this.selection.includes(relatedPK) === false) {
+        if (selectedPKs.includes(relatedPK) === false) {
           return {
-            [this.junctionPrimaryKey.field]:
-              junctionRow[this.junctionPrimaryKey.field],
+            [this.junctionPrimaryKey]: junctionRow[this.junctionPrimaryKey],
             $delete: true
           };
         }
 
         // If $delete flag is set and the item is re-selected, remove $delete flag
-        if (junctionRow.$delete && this.selection.includes(relatedPK)) {
+        if (junctionRow.$delete && selectedPKs.includes(relatedPK)) {
           const clone = { ...junctionRow };
           delete clone.$delete;
           return clone;
@@ -377,7 +382,7 @@ export default {
       });
 
       // Fetch item values for all newly selected items
-      const newSelection = this.selection.filter(
+      const newSelection = selectedPKs.filter(
         pk => savedRelatedPKs.includes(pk) === false
       );
 
@@ -429,7 +434,7 @@ export default {
     saveEdits() {
       this.$emit("input", [
         ...(this.value || [] || []).map(val => {
-          if (val.id === this.editExisting[this.junctionPrimaryKey.field]) {
+          if (val.id === this.editExisting[this.junctionPrimaryKey]) {
             return {
               ...val,
               [this.junctionRelatedKey]: {
@@ -462,10 +467,9 @@ export default {
         this.$emit(
           "input",
           (this.value || []).map(val => {
-            if (val[this.junctionPrimaryKey.field] === junctionKey) {
+            if (val[this.junctionPrimaryKey] === junctionKey) {
               return {
-                [this.junctionPrimaryKey.field]:
-                  val[this.junctionPrimaryKey.field],
+                [this.junctionPrimaryKey]: val[this.junctionPrimaryKey],
                 $delete: true
               };
             }
