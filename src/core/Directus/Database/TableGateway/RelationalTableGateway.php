@@ -1049,6 +1049,9 @@ class RelationalTableGateway extends BaseTableGateway
         // ==========================================================================
         // Perform data casting based on the column types in our schema array
         // and Convert dates into ISO 8601 Format
+        // TODO: Casting value are going to be done using hooks to the Directus types
+        //       With the exception of number for MySQL, which the default client
+        //       Returns them as string
         // ==========================================================================
         $results = $this->parseRecord($results);
 

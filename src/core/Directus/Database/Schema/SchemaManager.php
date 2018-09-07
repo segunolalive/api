@@ -396,7 +396,7 @@ class SchemaManager
      */
     public function isIntegerType($type)
     {
-        return DataTypes::isIntegerType($type);
+        return $this->source->isIntegerType($type);
     }
 
     /**
@@ -408,7 +408,7 @@ class SchemaManager
      */
     public function isFloatingPointType($type)
     {
-        return static::isFloatingPointType($type);
+        return $this->source->isFloatingPointType($type);
     }
 
     /**
@@ -541,13 +541,9 @@ class SchemaManager
             $column['nullable'] = true;
         }
 
-        if (DataTypes::isFloatingPointType($type)) {
+        if ($this->isFloatingPointType($type)) {
             $column['length'] = sprintf('%d,%d', $column['precision'], $column['scale']);
-        } else if (DataTypes::isListType($type)) {
-            $column['length'] = implode(',', array_map(function ($value) {
-                return sprintf('"%s"', $value);
-            }, $column['length']));
-        } else if (DataTypes::isIntegerType($type)) {
+        } else if ($this->source->isIntegerType($type)) {
             $column['length'] = $column['precision'];
         } else {
             $column['length'] = $column['char_length'];

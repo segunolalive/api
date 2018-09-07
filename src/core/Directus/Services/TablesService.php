@@ -1108,17 +1108,13 @@ class TablesService extends AbstractService
         // TODO: Create new constraint that validates the column data type to be one of the list supported
         $this->validatePayload('directus_fields', $fields, $data, $params);
 
-        $type = ArrayUtils::get($data, 'type');
-        $isMultiType = DataTypes::isMultiDataTypeType($type);
-        if ($isMultiType && !ArrayUtils::has($data, 'datatype')) {
+        if (!ArrayUtils::has($data, 'datatype')) {
             throw new UnprocessableEntityException(
-                sprintf('type "%s" requires a "datatype" property', $type)
+                'datatype is required'
             );
         }
 
-        if ($isMultiType) {
-            $type = ArrayUtils::get($data, 'datatype', $type);
-        }
+        $type = ArrayUtils::get($data, 'type');
 
         if ($type && DataTypes::isLengthType($type) && !ArrayUtils::get($data, 'length')) {
             $fieldName = ArrayUtils::get($data, 'field');

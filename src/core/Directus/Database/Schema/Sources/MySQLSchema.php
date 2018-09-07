@@ -538,7 +538,7 @@ class MySQLSchema extends AbstractSchema
     /**
      * @inheritdoc
      */
-    public function getDecimalTypes()
+    public function getFloatingPointTypes()
     {
         return [
             'double',
@@ -568,15 +568,15 @@ class MySQLSchema extends AbstractSchema
      */
     public function getNumericTypes()
     {
-        return array_merge($this->getDecimalTypes(), $this->getIntegerTypes());
+        return array_merge($this->getFloatingPointTypes(), $this->getIntegerTypes());
     }
 
     /**
      * @inheritdoc
      */
-    public function isDecimalType($type)
+    public function isFloatingPointType($type)
     {
-        return $this->isType($type, $this->getDecimalTypes());
+        return $this->isType($type, $this->getFloatingPointTypes());
     }
 
     /**

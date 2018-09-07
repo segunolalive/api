@@ -28,12 +28,8 @@ abstract class AbstractSchema implements SchemaInterface
         foreach ($fields as $field) {
             foreach ($records as $index => $record) {
                 $fieldName = $field->getName();
-                if (ArrayUtils::has($record, $fieldName)) {
-                    $type = $field->getType();
-
-                    if (DataTypes::isMultiDataTypeType($type) || DataTypes::isUniqueType($type)) {
-                        $type = $field->getDataType();
-                    }
+                if (ArrayUtils::has($record, $fieldName) && !DataTypes::exists($field->getType())) {
+                    $type = $field->getDataType();
 
                     $records[$index][$fieldName] = $this->castValue($record[$fieldName], $type);
                 }
