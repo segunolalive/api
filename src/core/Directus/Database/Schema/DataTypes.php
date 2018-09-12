@@ -15,7 +15,6 @@ final class DataTypes
     const TYPE_LANG                 = 'lang';
     const TYPE_M2O                  = 'm2o';
     const TYPE_O2M                  = 'o2m';
-    const TYPE_PRIMARY_KEY          = 'primary_key';
     const TYPE_SORT                 = 'sort';
     const TYPE_STATUS               = 'status';
     const TYPE_STRING               = 'string';
@@ -39,6 +38,7 @@ final class DataTypes
             static::TYPE_BOOLEAN,
             static::TYPE_DATETIME,
             static::TYPE_FILE,
+            static::TYPE_GROUP,
             static::TYPE_NUMBER,
             static::TYPE_JSON,
             static::TYPE_LANG,
@@ -49,6 +49,10 @@ final class DataTypes
             static::TYPE_STRING,
             static::TYPE_TRANSLATION,
             static::TYPE_UUID,
+            static::TYPE_DATETIME_CREATED,
+            static::TYPE_DATETIME_MODIFIED,
+            static::TYPE_USER_CREATED,
+            static::TYPE_USER_MODIFIED,
         ];
     }
 
@@ -247,7 +251,6 @@ final class DataTypes
     public static function getUniqueTypes()
     {
         return array_merge([
-            static::TYPE_PRIMARY_KEY,
             static::TYPE_USER_CREATED,
             static::TYPE_USER_MODIFIED,
             static::TYPE_STATUS,

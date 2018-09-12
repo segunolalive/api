@@ -487,9 +487,14 @@ class MySQLSchema extends AbstractSchema
             case 'mediumint':
             case 'int':
             case 'integer':
-            case 'bigint':
-            case 'serial':
-                $data = ($data === null) ? null : (int)$data;
+            // do not cast bigint values. php doesn't support bigint
+            // case 'bigint':
+            // case 'serial':
+            // Only cast if the value is numeric already
+            // Avoid casting when the hooks already have cast numeric data type set as boolean type
+                if (is_numeric($data)) {
+                    $data = (int) $data;
+                }
                 break;
             case 'numeric':
             case 'float':
