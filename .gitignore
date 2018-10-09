@@ -45,3 +45,9 @@ thumbnail/**/
 node_modules
 
 package-lock.json
+
+# Ignore docker mysql data backup
+volumes
+
+# ignore vscode
+.vscode
