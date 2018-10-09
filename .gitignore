@@ -60,3 +60,10 @@ volumes
 # Keep gitkeep files
 # This will make sure empty directories has at least one file so it can be tracked by git
 !**/.gitkeep
+package-lock.json
+
+# Ignore docker mysql data backup
+volumes
+
+# ignore vscode
+.vscode
